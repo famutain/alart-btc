@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cảnh Báo Giá BTC</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            text-align: center;
+            color: #333;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .left-column {
+            width: 100%;
+            max-width: 400px;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .right-column {
+            width: 100%;
+            max-width: 800px;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1, h2 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #007BFF;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+        }
+
+        input[type="number"], input[type="radio"], button {
+            font-size: 1rem;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        @media (max-width: 768px) {
+            .left-column, .right-column {
+                max-width: 100%;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            input[type="number"], input[type="radio"], button {
+                padding: 8px;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+    <script>
+        let alertPrice = 0;
+        let alertCondition = "greater"; // Mặc định là "lớn hơn"
+        let alertDuration = 10000; // Thời gian cảnh báo mặc định là 10 giây
+        let ws;
+        let alertSound = new Audio('/static/alert2.wav'); // Đảm bảo đường dẫn đến file âm thanh đúng và có thể truy cập từ trang web
+        let alertSoundTimeout; // Lưu trữ timeout để điều khiển âm thanh
+        let alertSoundInterval; // Lưu trữ interval để lặp lại âm thanh
+    
+        function initWebSocket() {
+            ws = new WebSocket("wss://stream.binance.com:9443/ws/btcusdt@trade");
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                const price = parseFloat(data.p);
+                document.getElementById("btc-price").innerText = `$${price.toFixed(2)}`;
+    
+                // Kiểm tra điều kiện cảnh báo
+                if (alertPrice > 0) {
+                    if ((alertCondition === "greater" && price >= alertPrice) || (alertCondition === "less" && price <= alertPrice)) {
+                        new Notification("Giá BTC đạt ngưỡng!", { body: `Giá BTC/USDT đã đạt $${price.toFixed(2)}` });
+    
+                        // Phát âm thanh liên tục trong thời gian cảnh báo
+                        alertSound.play();
+                        clearInterval(alertSoundInterval); // Hủy bỏ interval cũ
+    
+                        // Lặp lại âm thanh mỗi giây trong suốt thời gian cảnh báo
+                        alertSoundInterval = setInterval(() => {
+                            alertSound.currentTime = 0; // Đặt lại âm thanh về đầu
+                            alertSound.play();
+                        }, 1000);
+    
+                        // Hủy bỏ interval sau thời gian cảnh báo
+                        setTimeout(() => {
+                            clearInterval(alertSoundInterval); // Dừng lặp lại âm thanh
+                            alertSound.pause();
+                            alertSound.currentTime = 0; // Đặt lại âm thanh về đầu
+                        }, alertDuration); // Thời gian cảnh báo được chuyển thành ms
+    
+                        alertPrice = 0; // Đặt lại giá cảnh báo sau khi kích hoạt
+                    }
+                }
+            };
+        }
+    
+        function setAlert() {
+            Notification.requestPermission().then(permission => {
+                if (permission === "granted") {
+                    alertPrice = parseFloat(document.getElementById("alert-input").value);
+                    alertCondition = document.querySelector('input[name="condition"]:checked').value;
+                    alertDuration = parseInt(document.getElementById("alert-duration").value) * 1000; // Convert to milliseconds
+
+                    if (isNaN(alertPrice) || alertPrice <= 0) {
+                        alert("Vui lòng nhập giá hợp lệ");
+                        return;
+                    }
+
+                    // Hiển thị trạng thái cảnh báo
+                    const alertStatus = document.getElementById("alert-status");
+                    alertStatus.innerHTML = `Đã đặt cảnh báo giá BTC ở mức $${alertPrice} với điều kiện ${alertCondition === 'greater' ? 'lớn hơn' : 'nhỏ hơn'} và thời gian cảnh báo là ${alertDuration / 1000} giây.`;
+                    alertStatus.style.color = 'green';  // Màu sắc thành công
+                } else {
+                    alert("Bạn cần cấp quyền thông báo để nhận cảnh báo");
+                }
+            });
+        }
+    
+        function testSound() {
+            alertSound.play();  // Phát âm thanh khi nhấn nút kiểm tra âm thanh
+        }
+    
+        function adjustPrice(increase) {
+            let currentPrice = parseFloat(document.getElementById("btc-price").innerText.replace('$', ''));
+            if (isNaN(currentPrice)) {
+                alert("Không thể lấy giá hiện tại");
+                return;
+            }
+    
+            // Điều chỉnh giá hiện tại
+            let newPrice = increase ? currentPrice + 1 : currentPrice - 1;
+            document.getElementById("btc-price").innerText = `$${newPrice.toFixed(2)}`;
+            document.getElementById("alert-input").value = newPrice.toFixed(2); // Cập nhật giá vào ô nhập cảnh báo
+        }
+
+        window.onload = initWebSocket; // Đảm bảo WebSocket được khởi tạo khi trang đã tải xong
+    </script>
+    
+</head>
+<body>
+    <div class="container">
+        <!-- Phần Đặt Cảnh Báo -->
+        <div class="left-column">
+            <h1>Giá BTC/USDT</h1>
+            <h2 id="btc-price">Đang tải...</h2>
+
+            <label for="alert-input">Nhập giá cảnh báo:</label>
+            <input type="number" id="alert-input" step="0.01">
+
+            <label for="condition-greater">Lớn hơn</label>
+            <input type="radio" id="condition-greater" name="condition" value="greater" checked>
+
+            <label for="condition-less">Nhỏ hơn</label>
+            <input type="radio" id="condition-less" name="condition" value="less">
+
+            <label for="alert-duration">Thời gian cảnh báo (giây):</label>
+            <input type="number" id="alert-duration" value="10" min="1" max="60">
+
+            <button onclick="setAlert()">Đặt cảnh báo</button>
+            <button onclick="adjustPrice(true)">Chỉnh giá lên</button>
+            <button onclick="adjustPrice(false)">Chỉnh giá xuống</button>
+            <button onclick="testSound()">Kiểm tra âm thanh</button>
+
+            <!-- Trạng thái đặt cảnh báo -->
+            <div id="alert-status" style="margin-top: 20px; color: green; font-weight: bold;"></div>
+        </div>
+
+        <!-- Phần Biểu Đồ -->
+        <div class="right-column">
+            <h2>Biểu đồ giá BTC</h2>
+            <div class="tradingview-widget-container">
+                <div id="tradingview_chart"></div>
+                <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+                <script type="text/javascript">
+                    window.tvWidget = new TradingView.widget({
+                        "container_id": "tradingview_chart",
+                        "symbol": "BINANCE:BTCUSDT",
+                        "interval": "1",
+                        "timezone": "Etc/UTC",
+                        "theme": "light",
+                        "style": "1",
+                        "locale": "vi",
+                        "toolbar_bg": "#f1f3f6",
+                        "enable_publishing": false,
+                        "hide_top_toolbar": true,
+                        "allow_symbol_change": false,
+                        "save_image": false
+                    });
+                </script>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
